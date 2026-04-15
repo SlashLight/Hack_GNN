@@ -18,9 +18,9 @@ def extract_json_keys(body: bytes, content_type: str) -> list[str]:
     except orjson.JSONDecodeError:
         return []
     if isinstance(data, dict):
-        return list(data.keys())
+        return sorted(data.keys())[:_MAX_KEYS]
     if isinstance(data, list) and data and isinstance(data[0], dict):
-        return list(data[0].keys())
+        return sorted(data[0].keys())[:_MAX_KEYS]
     return []
 
 

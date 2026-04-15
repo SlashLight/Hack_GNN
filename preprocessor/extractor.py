@@ -189,6 +189,7 @@ def extract_parameters(
             is_reflected=reflected,
             value_entropy=compute_entropy(value),
             is_sensitive=is_sensitive_name(name),
+            original_value=value,
         ))
 
     # Multipart field names → location="body" (value_type determined by is_file flag)
@@ -231,5 +232,4 @@ def _collect_json_params(
     elif isinstance(obj, list):
         for item in obj[:3]:
             _collect_json_params(item, out, seen, depth + 1)
-
 

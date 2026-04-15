@@ -9,8 +9,8 @@ class ValueTracker:
     Принцип работы:
     - record_response() сохраняет leaf-значения из JSON-ответа эндпоинта.
     - find_dependencies() проверяет каждый параметр запроса против буфера:
-      для path-параметров (location="path") использует param.original_value (реальное
-      значение из URL, например "42"); для остальных — param.name. Возвращает
+      использует param.original_value (реальное значение параметра для path/query/body).
+      Параметры без original_value пропускаются. Возвращает
       (source, dst, matched_value, param_name) для каждого совпадения.
     """
 
@@ -39,8 +39,8 @@ class ValueTracker:
     ) -> list[tuple[str, str, str, str]]:
         """Возвращает [(source_endpoint, current_endpoint, matched_value, param_name)].
 
-        Для path-параметров (location="path") сверяет param.original_value с буфером.
-        Для остальных — param.name. param_name всегда равен param.name (используется
+        Сверяет param.original_value с буфером сохранённых значений. Параметры без
+        original_value пропускаются. param_name всегда равен param.name (используется
         для построения dep_params multi-hot в edge features).
 
         Дедупликация: один и тот же (source, candidate) не эмитируется дважды.
@@ -49,7 +49,11 @@ class ValueTracker:
         deps: list[tuple[str, str, str, str]] = []
         seen: set[tuple[str, str]] = set()  # (source, candidate) — не допускать дубли одного значения
         for param in parameters:
-            candidate = param.original_value if param.location == "path" else param.name
+            if param.original_value is None:
+                continue
+            candidate = str(param.original_value).strip()
+            if len(candidate) < self.MIN_LEN or candidate.lower() in self._IGNORE:
+                continue
             if candidate in self._value_to_endpoint:
                 source = self._value_to_endpoint[candidate]
                 if source != endpoint_id and (source, candidate) not in seen:

@@ -15,7 +15,22 @@ from preprocessor.extractor import (
     extract_auth,
     extract_path_params,
 )
-from preprocessor.models import Parameter, ProcessedEvent
+from preprocessor.models import ProcessedEvent
+
+_REFLECTION_MAX_BYTES = 64 * 1024
+_TEXT_RESPONSE_HINTS = (
+    "json",
+    "text/",
+    "xml",
+    "html",
+    "javascript",
+    "x-www-form-urlencoded",
+)
+
+
+def _is_text_response(content_type: str) -> bool:
+    lowered = content_type.lower()
+    return any(hint in lowered for hint in _TEXT_RESPONSE_HINTS)
 
 
 @dataclass
@@ -83,19 +98,22 @@ def _make_processed_event(raw: RawHTTPEvent) -> ProcessedEvent:
             form_str = raw.request_body.decode("utf-8", errors="replace")
             form_data = parse_qs(form_str, keep_blank_values=True)
 
-    # Reflection check requires response body text
-    response_text = raw.response_body.decode("utf-8", errors="replace")
+    # 3. Response content-type
+    ct = raw.response_headers.get("content-type", "") or raw.response_headers.get("Content-Type", "")
+
+    # Reflection check is only meaningful for textual responses.
+    if _is_text_response(ct):
+        response_text = raw.response_body[:_REFLECTION_MAX_BYTES].decode("utf-8", errors="replace")
+    else:
+        response_text = ""
     params = extract_parameters(query, json_body, form_data, response_text, multipart_fields=multipart_fields)
 
     # Add path params
     path_params = extract_path_params(original_path, path)
     params = params + path_params
 
-    # 3. Auth
+    # 4. Auth
     auth = extract_auth(raw.headers)
-
-    # 4. Response content-type
-    ct = raw.response_headers.get("content-type", "") or raw.response_headers.get("Content-Type", "")
 
     # 5. JSON keys & values from response body
     resp_keys = extract_json_keys(raw.response_body, ct)
