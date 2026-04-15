@@ -18,6 +18,32 @@ _AUTH_MAP: dict[str | None, str] = {
 _AUTH_REQUIRED_THRESHOLD = 0.8
 
 
+_TYPE_MAP: dict[str, str] = {
+    "int": "integer",
+    "boolean": "boolean",
+    "number": "number",
+    "float": "number",
+    "double": "number",
+    "file": "file",
+    "object": "object",
+    "array": "array",
+    # Preprocessor-specific value types mapped to schema-compatible primitives.
+    "uuid": "string",
+    "hash": "string",
+    "jwt": "string",
+    "email": "string",
+    "objectid": "string",
+    "url": "string",
+    "date": "string",
+    "base64": "string",
+    "string": "string",
+}
+
+
+def _map_param_type(value_type: str) -> str:
+    return _TYPE_MAP.get(value_type.lower(), "string")
+
+
 def _parse_method_path(endpoint_id: str) -> tuple[str, str]:
     """Split 'METHOD /path/template' into (method, path)."""
     parts = endpoint_id.split(" ", 1)
@@ -64,19 +90,19 @@ def extract_from_traffic(
                     if param.name not in query_seen:
                         query_seen[param.name] = ParamInfo(
                             name=param.name,
-                            type=param.value_type,
+                            type=_map_param_type(param.value_type),
                         )
                 elif param.location == "header":
                     if param.name not in header_seen:
                         header_seen[param.name] = ParamInfo(
                             name=param.name,
-                            type=param.value_type,
+                            type=_map_param_type(param.value_type),
                         )
                 elif param.location == "body":
                     if param.name not in body_fields_seen:
                         body_fields_seen[param.name] = FieldInfo(
                             name=param.name,
-                            type=param.value_type,
+                            type=_map_param_type(param.value_type),
                             depth=0,
                         )
 
@@ -84,7 +110,7 @@ def extract_from_traffic(
         # ProcessedEvent.content_type stores the response Content-Type
         content_types = [ev.content_type for ev in events if ev.content_type]
         content_type: str | None = _most_common(content_types) if content_types else None  # type: ignore[assignment]
-        request_content_type = content_type
+        request_content_type = None
         response_content_type = content_type
 
         # --- response_body_fields: union of response_keys across events ---

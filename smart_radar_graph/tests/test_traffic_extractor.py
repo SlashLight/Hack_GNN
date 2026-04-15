@@ -60,6 +60,22 @@ class TestExtractFromTraffic:
         events = {"GET /api/users": [_event(content_type="application/json")]}
         eps = extract_from_traffic(events)
         assert eps[0].response_content_type == "application/json"
+        assert eps[0].request_content_type is None
+
+    def test_param_types_mapped_to_schema_types(self):
+        events = {"POST /api/users": [_event(
+            eid="POST /api/users",
+            method="POST",
+            parameters=[
+                _param("user_id", location="query", value_type="int"),
+                _param("x-token", location="header", value_type="jwt"),
+                _param("avatar", location="body", value_type="file"),
+            ],
+        )]}
+        eps = extract_from_traffic(events)
+        assert {p.name: p.type for p in eps[0].query_params}["user_id"] == "integer"
+        assert {p.name: p.type for p in eps[0].header_params}["x-token"] == "string"
+        assert {f.name: f.type for f in eps[0].request_body_fields}["avatar"] == "file"
 
     def test_raw_examples_max_5(self):
         events = {"GET /api/users": [_event(response_values={"id": str(i)}) for i in range(10)]}

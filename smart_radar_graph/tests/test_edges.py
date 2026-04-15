@@ -63,6 +63,11 @@ class TestSharedPrefix:
         edges = build_shared_prefix_edges(eps, _idx(eps))
         assert edges.shape[1] == 0  # only 1 literal (api)
 
+    def test_parametric_placeholder_names_do_not_break_lcp(self):
+        eps = [_ep("/api/{v}/users/{id}"), _ep("/api/{x}/users/{post_id}")]
+        edges = build_shared_prefix_edges(eps, _idx(eps))
+        assert edges.shape[1] == 2  # both directions
+
 
 class TestDataDependency:
     def test_field_name_match(self):
@@ -100,4 +105,23 @@ class TestDataDependency:
         # These should NOT match
         assert edges.shape[1] == 0
 
+    def test_min_value_length_applies_when_examples_contain_values(self):
+        eps = [
+            _ep(
+                "/api/sessions",
+                "GET",
+                response_body_fields=[FieldInfo("session_token", "string", 0)],
+                raw_examples=[{"response_values": {"session_token": "abc1234"}}],
+            ),
+            _ep(
+                "/api/sessions/use",
+                "POST",
+                query_params=[ParamInfo("session_token", "string")],
+                raw_examples=[{"params": {"session_token": "abc1234"}}],
+            ),
+        ]
+        strict = build_data_dependency_edges(eps, _idx(eps), min_value_length=8)
+        relaxed = build_data_dependency_edges(eps, _idx(eps), min_value_length=6)
+        assert strict.shape[1] == 0
+        assert relaxed.shape[1] == 1
 

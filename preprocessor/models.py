@@ -11,7 +11,7 @@ class Parameter:
     is_reflected: bool = False
     value_entropy: float = 0.0    # Shannon entropy of the value
     is_sensitive: bool = False    # name contains password/token/secret/key
-    original_value: str | None = None  # Оригинальное значение для path-параметров
+    original_value: str | None = None  # Оригинальное значение параметра (path/query/body)
 
 
 @dataclass

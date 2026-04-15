@@ -6,7 +6,6 @@ Returns [2, 0] if no edges are found.
 """
 from __future__ import annotations
 
-import random
 from collections import defaultdict
 from itertools import combinations
 
@@ -44,10 +43,11 @@ def _is_param(seg: str) -> bool:
 def build_resource_hierarchy_edges(
     endpoints: list[RawEndpoint], idx: NodeIndex
 ) -> torch.Tensor:
-    """Trie-based parent_of edges.
+    """Build directed parent_of edges via nearest-prefix path lookup.
 
-    For each (path_template, child), find the nearest prefix parent path.
-    Operates at path_template level; if parent has multiple methods, create
+    For each child path_template, scan known path templates to find the
+    nearest strict prefix parent path. Operates at path_template level;
+    if parent has multiple methods, create
     one edge per parent-method → child-method combination.
     """
     # Group node indices by path_template
@@ -158,10 +158,11 @@ def build_shared_prefix_edges(
                 continue
             segs_b = segs_cache[path_b]
 
-            # Compute LCP length and count literals within it
+            # Compute LCP length and count literals within it.
+            # Param-vs-param positions keep the chain even if placeholders differ.
             lcp_len = 0
             for sa, sb in zip(segs_a, segs_b):
-                if sa != sb:
+                if sa != sb and not (_is_param(sa) and _is_param(sb)):
                     break
                 lcp_len += 1
 
@@ -222,6 +223,44 @@ def _types_compatible(t1: str, t2: str) -> bool:
     return pair in _COMPATIBLE_TYPES
 
 
+def _observed_response_values(endpoint: RawEndpoint) -> set[str]:
+    values: set[str] = set()
+    for sample in endpoint.raw_examples:
+        response_values = sample.get("response_values")
+        if not isinstance(response_values, dict):
+            continue
+        for value in response_values.values():
+            if value is None:
+                continue
+            values.add(str(value).strip())
+    return {v for v in values if v}
+
+
+def _observed_param_values(endpoint: RawEndpoint) -> set[str]:
+    values: set[str] = set()
+    for sample in endpoint.raw_examples:
+        params = sample.get("params")
+        if not isinstance(params, dict):
+            continue
+        for value in params.values():
+            if value is None:
+                continue
+            values.add(str(value).strip())
+    return {v for v in values if v}
+
+
+def _has_value_overlap(
+    producer_values: set[str],
+    consumer_values: set[str],
+    min_value_length: int,
+) -> bool:
+    threshold = max(0, min_value_length)
+    overlap = producer_values & consumer_values
+    if threshold == 0:
+        return bool(overlap)
+    return any(len(value) >= threshold for value in overlap)
+
+
 def build_data_dependency_edges(
     endpoints: list[RawEndpoint],
     idx: NodeIndex,
@@ -244,9 +283,13 @@ def build_data_dependency_edges(
 
     # Precompute consumer param stems per node
     consumer_stems_map: dict[int, list[tuple[str, str]]] = {}
+    consumer_values_map: dict[int, set[str]] = {}
+    producer_values_map: dict[int, set[str]] = {}
     for ep, nidx in node_list:
         params = list(ep.query_params) + list(ep.header_params) + list(ep.request_body_fields)
         consumer_stems_map[nidx] = [(_stem(p.name), p.type) for p in params]
+        consumer_values_map[nidx] = _observed_param_values(ep)
+        producer_values_map[nidx] = _observed_response_values(ep)
 
     for i, (prod_ep, prod_idx) in enumerate(node_list):
         if not prod_ep.response_body_fields:
@@ -260,6 +303,11 @@ def build_data_dependency_edges(
 
             for p_stem, p_type in consumer_stems_map[cons_idx]:
                 if p_stem in prod_stems and _types_compatible(prod_stems[p_stem], p_type):
+                    producer_values = producer_values_map.get(prod_idx, set())
+                    consumer_values = consumer_values_map.get(cons_idx, set())
+                    if producer_values and consumer_values:
+                        if not _has_value_overlap(producer_values, consumer_values, min_value_length):
+                            continue
                     src_list.append(prod_idx)
                     dst_list.append(cons_idx)
                     break
@@ -267,4 +315,3 @@ def build_data_dependency_edges(
     if not src_list:
         return _empty()
     return torch.tensor([src_list, dst_list], dtype=torch.long)
-

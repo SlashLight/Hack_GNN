@@ -67,7 +67,7 @@ def _extract_session_id(headers: dict[str, str]) -> str:
     return "anonymous"
 
 
-def _make_processed_event(raw: RawHTTPEvent) -> ProcessedEvent:
+def make_processed_event(raw: RawHTTPEvent) -> ProcessedEvent:
     """Конвертирует RawHTTPEvent → ProcessedEvent через весь пайплайн."""
     # 1. Normalize URL
     parsed_url = urlparse(raw.url)
@@ -136,3 +136,8 @@ def _make_processed_event(raw: RawHTTPEvent) -> ProcessedEvent:
         status_code=raw.status_code,
         content_type=ct,
     )
+
+
+def _make_processed_event(raw: RawHTTPEvent) -> ProcessedEvent:
+    """Backward-compatible alias for make_processed_event()."""
+    return make_processed_event(raw)

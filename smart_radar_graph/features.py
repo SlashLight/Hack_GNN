@@ -217,7 +217,7 @@ def _extract_single(ep: RawEndpoint) -> list[float]:
     # ── 13-16: request_content_type one-hot (json, form-urlencoded, multipart, xml-other) ──
     feats.extend(_classify_content_type(ep.request_content_type))  # 13-16
 
-    # ── 17: input_complexity = (path_params + query + header + body_top_level) * (1 + max_nesting) ──
+    # ── 17: input_complexity = (path_params + query + header + body_top_level) * max(1, max_nesting) ──
     body_top_level = sum(1 for f in ep.request_body_fields if f.depth == 0)
     total_inputs = num_path_params + len(ep.query_params) + len(ep.header_params) + body_top_level
     max_nesting = max((f.depth for f in ep.request_body_fields), default=0)

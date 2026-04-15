@@ -6,7 +6,7 @@ from urllib.parse import urlencode
 import mitmproxy.http
 from mitmproxy import ctx
 
-from preprocessor.pipeline import RawHTTPEvent, _make_processed_event
+from preprocessor.pipeline import RawHTTPEvent, make_processed_event
 from graph.builder import GraphBuilder
 from graph.visualizer import draw_graph
 
@@ -73,7 +73,7 @@ class GraphAddon:
         )
 
         try:
-            event = _make_processed_event(raw)
+            event = make_processed_event(raw)
         except Exception as exc:
             ctx.log.warn(f"[graph] Skipping {req.url}: {exc}")
             return
